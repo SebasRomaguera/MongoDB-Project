@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI, HTTPException
 from models import Book, UpdateBookDTO
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -20,6 +19,12 @@ async def lifespan(app: FastAPI):
 async def startup_db_client(app):
     app.mongodb_client = AsyncIOMotorClient(mongo_url)
     app.mongodb = app.mongodb_client.get_database("library")
+
+    # Crear índices para búsquedas eficientes
+    #await app.mongodb["books"].create_index("title")
+    #await app.mongodb["books"].create_index("author")
+    #await app.mongodb["books"].create_index("isbn", unique=True)
+
     print("MongoDB connected.")
 
 async def shutdown_db_client(app):
@@ -71,3 +76,12 @@ async def delete_book(isbn: str):
     if delete_result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Book not found")
     return {"message": "Book deleted successfully"}
+
+@app.get("/api/v1/books/stats")
+async def book_statistics():
+    pipeline = [
+        {"$group": {"_id": "$genre", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    stats = await app.mongodb["books"].aggregate(pipeline).to_list(None)
+    return stats
