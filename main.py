@@ -1,30 +1,9 @@
-# File: main.py
-# Project: FastAPI CRUD with MongoDB
-# import fast api
+# main.py
 from fastapi import FastAPI, HTTPException
-
-from models import User # import the user model defined by us
-
-# imports for the MongoDB database connection
+from models import Book, UpdateBookDTO
 from motor.motor_asyncio import AsyncIOMotorClient
-
-# import for fast api lifespan
 from contextlib import asynccontextmanager
-
-from typing import List # Supports for type hints
-
-from pydantic import BaseModel # Most widely used data validation library for python
-
-# define a lifespan method for fastapi
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Start the database connection
-    await startup_db_client(app)
-    yield
-    # Close the database connection
-    await shutdown_db_client(app)
-
-# method for start the MongoDb Connection
+from typing import List
 import os
 from dotenv import load_dotenv
 
@@ -32,70 +11,63 @@ load_dotenv()
 
 mongo_url = os.getenv("MONGO_URL")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await startup_db_client(app)
+    yield
+    await shutdown_db_client(app)
+
 async def startup_db_client(app):
     app.mongodb_client = AsyncIOMotorClient(mongo_url)
-    app.mongodb = app.mongodb_client.get_database("college")
+    app.mongodb = app.mongodb_client.get_database("library")
     print("MongoDB connected.")
 
-
-# method to close the database connection
 async def shutdown_db_client(app):
     app.mongodb_client.close()
     print("Database disconnected.")
 
-# creating a server with python FastAPI
 app = FastAPI(lifespan=lifespan)
 
-# hello world endpoint
 @app.get("/")
-def read_root():  # function that is binded with the endpoint
-    return {"Hello": "World"}
+def read_root():
+    return {"message": "Welcome to the Library API"}
 
-# C <=== Create
-@app.post("/api/v1/create-user", response_model=User)
-async def insert_user(user: User):
-    result = await app.mongodb["users"].insert_one(user.dict())
-    inserted_user = await app.mongodb["users"].find_one({"_id": result.inserted_id})
-    return inserted_user
+@app.post("/api/v1/create-book", response_model=Book)
+async def create_book(book: Book):
+    result = await app.mongodb["books"].insert_one(book.dict())
+    inserted_book = await app.mongodb["books"].find_one({"_id": result.inserted_id})
+    inserted_book.pop("_id")
+    return inserted_book
 
-# R <=== Read
-# Read all users
-@app.get("/api/v1/read-all-users", response_model=List[User])
-async def read_users():
-    users = await app.mongodb["users"].find().to_list(None)
-    return users
+@app.get("/api/v1/list-books", response_model=List[Book])
+async def list_books():
+    books = await app.mongodb["books"].find().to_list(None)
+    for book in books:
+        book.pop("_id", None)
+    return books
 
-# Read one user by email_address
-@app.get("/api/v1/read-user/{email_address}", response_model=User)
-async def read_user_by_email(email_address: str):
-    user = await app.mongodb["users"].find_one({"email_address": email_address})
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+@app.get("/api/v1/get-book/{isbn}", response_model=Book)
+async def get_book(isbn: str):
+    book = await app.mongodb["books"].find_one({"isbn": isbn})
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    book.pop("_id", None)
+    return book
 
-
-# U <=== Update
-# Update user
-
-class UpdateUserDTO(BaseModel):
-    other_names: List[str] = None
-    age: int = None
-    # Include other fields as needed, with defaults to None or use the exclude_unset=True option
-
-@app.put("/api/v1/update-user/{email_address}", response_model=User)
-async def update_user(email_address: str, user_update: UpdateUserDTO):
-    updated_result = await app.mongodb["users"].update_one(
-        {"email_address": email_address}, {"$set": user_update.dict(exclude_unset=True)})
+@app.put("/api/v1/update-book/{isbn}", response_model=Book)
+async def update_book(isbn: str, book_update: UpdateBookDTO):
+    updated_result = await app.mongodb["books"].update_one(
+        {"isbn": isbn}, {"$set": book_update.dict(exclude_unset=True)}
+    )
     if updated_result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="User not found or no update needed")
-    updated_user = await app.mongodb["users"].find_one({"email_address": email_address})
-    return updated_user
+        raise HTTPException(status_code=404, detail="Book not found or no update needed")
+    updated_book = await app.mongodb["books"].find_one({"isbn": isbn})
+    updated_book.pop("_id", None)
+    return updated_book
 
-# D <=== Delete
-# Delete user by email_address
-@app.delete("/api/v1/delete-user/{email_address}", response_model=dict)
-async def delete_user_by_email(email_address: str):
-    delete_result = await app.mongodb["users"].delete_one({"email_address": email_address})
+@app.delete("/api/v1/delete-book/{isbn}", response_model=dict)
+async def delete_book(isbn: str):
+    delete_result = await app.mongodb["books"].delete_one({"isbn": isbn})
     if delete_result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"message": "User deleted successfully"}
+        raise HTTPException(status_code=404, detail="Book not found")
+    return {"message": "Book deleted successfully"}

@@ -1,24 +1,26 @@
-from typing import Optional, List # Supports for type hints
-from pydantic import BaseModel # Most widely used data validation library for python
-from enum import Enum # Supports for enumerations
+# models.py
+from pydantic import BaseModel
+from typing import Optional
+from enum import Enum
 
-# enum for gender
-class Gender(str, Enum):
-    male = "male"
-    female = "female"
+class Genre(str, Enum):
+    fiction = "fiction"
+    nonfiction = "nonfiction"
+    fantasy = "fantasy"
+    science_fiction = "science_fiction"
+    biography = "biography"
 
-# enum for role
-class Role(str, Enum):
-    admin = "admin"
-    user = "user"
-    student = "student"
-    teacher = "teacher"
+class Book(BaseModel):
+    title: str
+    author: str
+    isbn: str
+    genre: Genre
+    published_year: int
+    available: bool
 
-class User(BaseModel):
-    first_name: str
-    last_name: str
-    middle_name: Optional[str] = None  # Make middle name optional
-    gender: Gender
-    email_address: str
-    phone_number: str
-    roles: List[Role] # user can have several roles
+class UpdateBookDTO(BaseModel):
+    title: Optional[str] = None
+    author: Optional[str] = None
+    genre: Optional[Genre] = None
+    published_year: Optional[int] = None
+    available: Optional[bool] = None
